@@ -1,0 +1,121 @@
+﻿(* This script will contain shared handlers for retrieiving person data *)	
+
+(** Public **)
+
+(**
+	Handler: 
+		ORNPerson.getPersons (domain, personsArray)
+	Description: 
+		Retrieve the person(s) data given the identifier of a person(s) from a given environment.
+	Parameters:
+		domain - Text, the unique identifier for the domain
+		personsArray - List, JSONValue description of requested person.
+	Returns: 
+		List, JSONValue descriptions of all requested persons for a given domain.
+**)
+to getPersons domain, personsArray
+	if item 1 in personsArray is empty
+		return personsArray
+	end if
+	
+	if domain is empty
+		throw (reason: "ORNPerson.getPersons, add 'domain' in your resource file.")
+	end if
+	
+	set personIds to ()
+	repeat with each person of personsArray
+		if person.personId is not empty
+			insert person.personId into personIds
+		end if
+	end repeat
+	
+	if personIds is empty
+		return personsArray
+	else
+		return ORNPerson.getPersonsDataWithTag (personsArray, getPersonData (domain, personIds))
+	end if
+end getPersons
+
+(**
+	Handler: 
+		ORNPerson.getPersonsDataWithTag (personsArray, personsData)
+	Description: 
+		Appends person.tag value to correct personData (retrieved from TDC) using matching personID
+	Parameters:
+		personsArray - List, JSONValue description of requested person.
+		personData - List, JSONValue descriptions of all requested persons for a given domain. 
+	Returns: 
+		List - List, JSONValue descriptions of all requested persons for a given domain including person.tag as available
+
+**)
+to getPersonsDataWithTag personsArray, personsData
+	set personsDataTag to ()
+	repeat with each data of personsData
+		repeat with array of personsArray
+			if array.personID equals data.personID
+				if array.tag is not empty then insert array.tag into data.tag
+				insert data into personsDataTag
+			end if
+		end repeat
+	end repeat
+	
+	// Add persons that dont have person ID defined to personDataTag list
+	repeat with array of personsArray
+		if  array.personID is empty then insert array into personsDataTag
+	end repeat
+	
+	return personsDataTag
+end getPersonsDataWithTag
+
+(**
+	Handler: 
+		ORNPerson.getPerson (environment, identifier)
+	Description: 
+		Retrieve the person given the identifier of a person from a given environment.
+	Parameters:
+		environment - JSONValue, the environment to search the person in.
+		identifier - The string identifier of the person to search for.
+	Returns: 
+		JSONValue, the contents of the person data.
+**)
+to getPerson environment, identifier
+	if environment is empty or identifier is empty
+		throw (reason: "ORNPerson.getPerson environment or identifier is empty")
+	end if
+	
+	Repeat for each item person in environment.persons
+		if person.personId is equal to identifier or person.tag is equal to identifier
+			Log "Found person with identifier:" && identifier
+			return person
+		end if
+	End repeat
+	
+	throw (reason: "ORNPerson.getPerson with identifier" && identifier && "not found")
+end getPerson
+
+(** Internal **)
+
+(**
+	Handler: 
+		ORNPerson.getPersonData (domain, personIds)
+	Description: 
+		Retrieve the person data for domain.  Done via API call using TDC request
+	Parameters:
+		domain - Text, the unique identifier for the domain
+		personIds - List, Text unqiue identifier for requested person. 
+	Returns: 
+		List, JSONValue descriptions of all requested persons for a given domain.
+**)
+to getPersonData domain, personIds
+	set personParams to "ids=" & personIds joined by ","
+	set resourceURL to "/domains/" & domain & "/persons?" & personParams
+	set response to ORNHTTP.get(resourceURL)
+	set personsData to JSONValue(response.responseBody)
+	
+	If number of items in personsData is greater than 0
+		Log "Retrieved person data for:" && personParams
+		return personsData.persons
+	else
+		throw (reason: "ORNPerson.getPersonData unable to retrieve valid persons data")
+	end if
+end getPersonData

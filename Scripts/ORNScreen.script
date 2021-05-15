@@ -1,0 +1,214 @@
+﻿(**
+	Handler: 
+		ORNScreen.topLeft
+	Description: 
+		Calculates top search area based on SUT screen resolution
+	Parameters: 
+		n/a 
+	Returns: 
+		Coordinate list (x, y, x, y) specifying location start and ending point of rectangle.
+**)
+to topLeft
+	log "Calculating top left area of SUT display."
+	return RemoteScreenRectangle() * (0, 0, .5, .5)
+end topLeft
+
+(**
+	Handler: 
+		ORNScreen.topRight
+	Description: 
+		Calculates top right area based on SUT screen resolution
+	Parameters: 
+		n/a
+	Returns: 
+		Coordinate list (x, y, x, y) specifying location start and ending point of rectangle.
+**)
+to topRight
+	log "Calculating top right area of SUT display.	"
+	set (x, y) to RemoteScreenSize()
+	return (x * .5, 0, x, y * .5)
+end topRight
+
+(**
+	Handler: 
+		ORNScreen.bottomRight
+	Description: 
+		Calculates bottom right area based on SUT screen resolution
+	Parameters: 
+		n/a  
+	Returns: 
+		Coordinate list (x, y, x, y) specifying location start and ending point of rectangle.
+**)
+to bottomRight
+	log "Calculating bottom right area of SUT display."
+	set (x, y) to RemoteScreenSize()
+	return (x * .5, y * .5, x, y)
+end bottomRight
+
+(**
+	Handler: 
+		ORNScreen.bottomLeft
+	Description: 
+		Calculates bottom left area based on SUT screen resolution
+	Parameters: 
+		n/a  
+	Returns: 
+		Coordinate list (x, y, x, y) specifying location start and ending point of rectangle.
+**)
+to bottomLeft
+	log "Calculating bottom left area of SUT display."
+	set (x, y) to RemoteScreenSize()
+	return (0, y * .5, x * .5, y)
+end bottomLeft
+
+(**
+	Handler: 
+		ORNScreen.topHalf
+	Description: 
+		Calculates top half area based on SUT screen resolution
+	Parameters: 
+		n/a  
+	Returns: 
+		Coordinate list (x, y, x, y) specifying location start and ending point of rectangle.
+**)
+to topHalf
+	log "Calculating top half area of SUT display."
+	return RemoteScreenRectangle() * (0, 0, 1, .5)
+end topHalf
+
+(**
+	Handler: 
+		ORNScreen.topQuarter
+	Description: 
+		Calculates top Quarter (25%) area based on SUT screen resolution
+	Parameters: 
+		n/a  
+	Returns: 
+		Coordinate list (x, y, x, y) specifying location start and ending point of rectangle.
+**)
+to topQuarter
+	log "Calculating top quarter area of SUT display."
+	return RemoteScreenRectangle() * (0, 0, 1, .25)
+end topQuarter
+
+(**
+	Handler: 
+		ORNScreen.bottomHalf
+	Description: 
+		Calculates bottom half area based on SUT screen resolution
+	Parameters: 
+		n/a 
+	Returns: 
+		Coordinate list (x, y, x, y) specifying location start and ending point of rectangle.
+**)
+to bottomHalf
+	log "Calculating bottom half area of SUT display."
+	set (x, y) to RemoteScreenSize()
+	return (0, y * .5, x, y)
+end bottomHalf
+
+(**
+	Handler: 
+		ORNScreen.bottomQuarter
+	Description: 
+		Calculates bottom Quarter (25%) area based on SUT screen resolution
+	Parameters: 
+		n/a 
+	Returns: 
+		Coordinate list (x, y, x, y) specifying location start and ending point of rectangle.
+**)
+to bottomQuarter
+	log "Calculating bottom quarter area of SUT display."
+	set (x, y) to RemoteScreenSize()
+	return (0, y * .75, x, y)
+end bottomQuarter
+
+(**
+	Handler: 
+		ORNScreen.leftHalf
+	Description: 
+		Calculates left half area based on SUT screen resolution
+	Parameters: 
+		n/a 
+	Returns: 
+		Coordinate list (x, y, x, y) specifying location start and ending point of rectangle.
+**)
+to leftHalf
+	log "Calculating left half area of SUT display."
+	return RemoteScreenRectangle() * (0, 0, .5, 1)
+end leftHalf
+
+(**
+	Handler: 
+		ORNScreen.rightHalf
+	Description: 
+		Calculates right half area based on SUT screen resolution
+	Parameters: 
+		n/a 
+	Returns: 
+		Coordinate list (x, y, x, y) specifying location start and ending point of rectangle.
+**)
+to rightHalf
+	log "Calculating right half area of SUT display."
+	set (x, y) to RemoteScreenSize()
+	return (x * .5, 0, x, y)
+end rightHalf
+
+(**
+	Handler: 
+		ORNScreen.center
+	Description: 
+		Calculates center area based on SUT screen resolution
+	Parameters: 
+		n/a 
+	Returns: 
+		Coordinate list (x, y, x, y) specifying location start and ending point of rectangle.
+**)
+to center
+	log "Calculating center area of SUT display."
+	set (x, y) to RemoteScreenSize()
+	return (x * .25, y * .25, x * .75, y * .75)
+end center
+
+(**
+	Handler: 
+		ORNScreen.fullScreen
+	Description: 
+		Calculates Full Screen area based on SUT screen resolution
+	Parameters: 
+		n/a 
+	Returns: 
+		Coordinate list (x, y, x, y) specifying location start and ending point of rectangle.
+**)
+to fullScreen
+	log "Calculating full screen area of SUT display."
+	return RemoteScreenRectangle()
+end fullScreen
+
+(**
+	Handler: 
+		ORNScreen.scale (startX, startY, endX, endY)
+	Description: 
+		Calculates search area based on device screen size and ratios/percentage passed in 
+		Example for getting top left 25% of screen: 
+         		set mySearchArea to ORNScreen.scale (0, 0, .5, .5)
+			If screensize is 1980x1080 your searchArea returned would be (0, 0, 990, 540)	
+	Parameters:
+		startX - starting X-axis ratio for screensize. (0 <= startX <= 1)
+   		startY - starting Y-axis ratio for screensize. (0 <= startY <= 1)
+    		endX - ending X-axis ratio for screensize. (startX <= endX <= 1)
+    		endY - ending Y-axis ratio for screensize. (startY <= endY <= 1) 
+	Returns: 
+		searchArea - x,y coordinate list used for search rectangle area
+**)
+to scale startX, startY, endX, endY
+	if startX is a number and startY is a number and endX is a number and endY is a number 
+		set (x,y) to ConnectionInfo().ScreenSize
+		set searchArea to (x * startX, y * startY, x * endX, y * endY)
+		log "Scaled Search Area is:" && searchArea
+		return searchArea
+	else
+		throw Name:"ORNScreen.scale", reason: "Invalid number used for calculation or invalid/empty parameters passed in"
+	end if
+	return searchArea
+end scale

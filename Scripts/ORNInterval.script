@@ -1,0 +1,72 @@
+﻿(** PUBLIC **)
+
+(**
+	Handler: 
+		ORNInterval.unit
+	Description: 
+		returns/sets a unit of 1 second
+		Used as based default of measurement/ratio for all other interval handlers
+	Parameters: 
+		n/a
+	Returns: 
+		time in seconds 
+**)
+to unit
+	return 1 second 
+end unit
+
+(**
+	Handler: 
+		ORNInterval.small
+	Description: 
+		returns a small time interval (unit * 5) 
+	Parameters:
+		n/a 
+	Returns: 
+		time in seconds 	
+**)
+to small
+	return ORNInterval.unit * 5
+end small
+
+(**
+	Handler: 
+		ORNInterval.short
+	Description: 
+		returns a small time interval  (unit * 15) 
+	Parameters: 
+		n/a 
+	Returns: 
+		time in seconds	
+**)
+to short
+	return ORNInterval.unit * 15
+end short
+
+(**
+	Handler: 
+		ORNInterval.medium
+	Description: 
+		returns a small time interval (unit * 30) 
+	Parameters: 
+		n/a
+	Returns: 
+		time in seconds 		
+**)
+to medium
+	return ORNInterval.unit *  30
+end medium
+
+(**
+	Handler: 
+		ORNInterval.long
+	Description: 
+		returns a small time interval (unit * 60) 
+	Parameters: 
+		n/a 
+	Returns: 
+		time in seconds 		
+**)
+to long
+	return ORNInterval.unit * 60
+end long

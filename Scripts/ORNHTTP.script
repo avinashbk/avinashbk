@@ -1,0 +1,181 @@
+﻿(* This script will contain shared handlers for HTTP request *)	
+
+(** Public **)
+
+(**
+	Handler: 
+		ORNHTTP.get (resource)
+	Description: 
+		Make a HTTP GET request, contextual headers will also be attached for debugging.
+		Throws an error if the HTTP status code is not < 400.
+	Parameters:
+		resource - String, the resource to be appended to the baseURL (e.g. /resources).
+	Returns: 
+		response object.
+**)
+to get resource
+	set parameters to (httpMethod: "GET")
+	return performRequest(resource, parameters)
+end get
+
+(**
+	Handler: 
+		ORNHTTP.post (resource, body)
+	Description: 
+		Make a HTTP POST request, contextual headers will also be attached for debugging.
+		Throws an error if the HTTP status code is not < 400.
+	Parameters:
+		resource - String, the resource to be appended to the baseURL (e.g. /resources).
+		body - JSONValue, the http request body to be attached to the request.
+	Returns: 
+		response object.
+**)
+to post resource, body
+	set parameters to (httpMethod: "POST", requestBody: body)
+	return performRequest(resource, parameters)
+end post
+
+(**
+	Handler: 
+		ORNHTTP.put (resource, body)
+	Description: 
+		Make a HTTP PUT request, contextual headers will also be attached for debugging.
+		Throws an error if the HTTP status code is not < 400.
+	Parameters:
+		resource - String, the resource to be appended to the baseURL (e.g. /resources).
+		body - JSONValue, the http request body to be attached to the request. 
+	Returns: 
+		response object.
+**)
+to put resource, body
+	set parameters to (httpMethod: "PUT", requestBody: body)
+	return performRequest(resource, parameters)
+end put
+
+(**
+	Handler: 
+		ORNHTTP.patch (resource, body)
+	Description: 
+		Make a HTTP PATCH request, contextual headers will also be attached for debugging.
+		Throws an error if the HTTP status code is not < 400.
+	Parameters:
+		resource - String, the resource to be appended to the baseURL (e.g. /resources).
+		body - JSONValue, the http request body to be attached to the request. 
+	Returns: 
+		response object.
+**)
+to patch resource, body
+	set parameters to (httpMethod: "PATCH", requestBody: body)
+	return performRequest(resource, parameters)
+end patch
+
+(**
+	Handler: 
+		ORNHTTP.delete (resource)
+	Description: 
+		Make a HTTP DELETE request, contextual headers will also be attached for debugging.
+		Throws an error if the HTTP status code is not < 400.
+	Parameters:
+		resource - String, the resource to be appended to the baseURL (e.g. /resources).
+		body - JSONValue, the http request body to be attached to the request.
+	Returns: 
+		response object.
+**)
+to delete resource
+	set parameters to (httpMethod: "DELETE")
+	return performRequest(resource, parameters)
+end delete
+
+(**
+	Handler: 
+		ORNHTTP.head (resource)
+	Description: 
+		Make a HTTP GET request, contextual headers will also be attached for debugging.
+		Throws an error if the HTTP status code is not < 400.
+	Parameters:
+		resource - String, the resource to be appended to the baseURL (e.g. /resources).
+	Returns: 
+		response object.
+**)
+to head resource
+	set parameters to (httpMethod: "HEAD")
+	return performRequest(resource, parameters)
+end head
+
+(**
+	Handler: 
+		ORNHTTP.performRequest (resource, parameters)
+	Description: 
+		Make a GenericHTTP request, contextual headers will also be attached for debugging.
+		Throws an error if the HTTP status code is not < 400.
+		Parameters: httpMethod (required), requestBody (optional).
+	Parameters:
+		resource - String, the resource to be appended to the baseURL (e.g. /resources).
+		parameters - List, the request parameters (see below).
+	Returns: 
+		response object.
+**)
+to performRequest resource, parameters
+	set baseURL to "https://cti.stagingcerner.net"
+	set resourceURL to baseURL & resource
+	
+	set correlationId to createGUID()
+	set requestHeaders to (<<Cerner-App-Build>>: buildNumber(), <<Cerner-App-Version>>: version().eggplant, <<Cerner-App-ID>>: "com.cerner.eggplant", <<Cerner-App-Name>>: "Eggplant", <<Cerner-Correlation-Id>>: correlationId, <<Cerner-Device-Id>>: hostName(), <<Cerner-Device-Model>>: platform(), <<Cerner-Device-OS>>: OSInfo().ProductName && OSInfo.ProductVersion, <<Cerner-User-Name>>: userInfo().ShortName)
+	
+	set request to (httpmethod: parameters.httpmethod, url: resourceURL, requestHeaders: requestHeaders)
+	
+	if parameters.requestBody is not empty
+		set request.requestBody to parameters.requestBody
+		set request.requestBodyFormat to "JSON (application/json)"
+	end if
+	
+	try
+		Log "Making HTTP request to " & resource && "("& correlationId &")"
+		set response to GenericHTTP(request)
+		
+		if response.statusCode is greater than or equal to 400
+			throw (reason: "Invalid HTTP response:" && response.statusCode)
+		end if
+		
+		return response
+	catch exception
+		Log "ORNHTTP.performRequest failed - " & exception.reason
+		throw exception
+	end try
+end performRequest
+
+(** Internal **)
+
+(**
+	Handler: 
+		ORNHTTP.createGUID
+	Description: 
+		Create random Correlation ID
+	Parameters: 
+		n/a 
+	Returns: 
+		String, random alpha-numeric value, useful for Cerner-Correlation-Ids
+**)
+
+to createGUID
+	put a..f into Letters
+	put 0..9 into Numbers
+	
+	set guid to ""
+	
+	set count to 0
+	repeat while count is less than 32
+		add 1 to count
+		if count mod 8 is equal to 0 and count is not equal to 32
+			put "-" after guid
+		else
+			if random(0,1) is equal to 1
+				put any item of Letters after guid
+			else 
+				put any item of Numbers after guid 
+			end if
+		end if 
+	end repeat
+	
+	return Uppercase(guid)
+end createGUID 

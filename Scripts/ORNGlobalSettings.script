@@ -1,0 +1,35 @@
+﻿(* This script will contain shared handlers for setting System and Global Variables*)	
+
+(** Public **)
+
+(**
+	Handler: 
+		ORNGlobalSettings.apply (overrides)
+	Description: 
+		Prepare Eggplant Functional global settings.
+	Parameters:
+		overrides - JSONValue, properties and associated values to override default values.
+	Returns: n/a
+**)
+to apply overrides
+	Log "Applying ORNGlobalSettings."
+	
+	if overrides is not empty
+		LogWarning "We do not yet support overridding ORNGlobalSettings, continuing..."
+	end if
+	
+	// Use if test seems to go to fast at times between statements.
+	set the remoteWorkInterval to 1.5
+	
+	// Do not wait for more than 30 seconds.
+	set Global maxWaitTime to 30
+	
+	// If assertion failure test can continue on.
+	// Override as test level with exception as needed.
+	set the AssertionBehavior to error
+	
+	// Enable the Enhance local contrast and Enable aggressive text extraction OCR preferences
+	set the currentTextPlatform.OCRstyles.default to (EnableAggressiveTextExtraction: "Yes", EnhanceLocalContrast: "Yes")
+	
+	Log "ORNGlobalSettings applied, continuing..."
+end apply

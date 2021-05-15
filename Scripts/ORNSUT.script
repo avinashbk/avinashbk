@@ -1,0 +1,438 @@
+﻿(* This script will contain shared handlers for working with System Under Test (SUT) *)	
+
+(** Public **)
+
+(**
+	Handler: 
+		ORNSUT.connectSUT (sut)
+	Description: 
+		Connect to local SUT if avaliable, else reserve and connect to a system for testing. 
+		For shared device connection see criteria in ORNSUT.connectSharedSUT.
+    		For personal device see criteria in ORNSUT.connectPersonalSUT.
+	Parameters:
+		sut - a criteria used to reserve and connect to a device.		 
+	Returns: 
+		JSONValue, the active connection information.
+**)
+to connectSUT sut
+	if sut.name is not empty or sut.host is not empty
+		Log "Attempting connection to Personal device" && sut.name && sut.host
+		connectPersonalSUT(item 1 in sut)
+		set connectedSut to (ConnectionInfo())
+	else
+		Log "Attempting connection to a Shared device"
+		set connectedSut to connectSharedSUT(item 1 in sut)
+	end if
+	return connectedSut
+end connectSUT
+
+(**
+	Handler: 
+		ORNSUT.connectSharedSUT (sut)	
+	Description: 
+		Reserve and connect to a system for testing. Criteria currently supports:
+    				os, form_factor, manufacturer, model, version.
+ 		An example would include:
+    			"suts": [
+      			{
+        			"os": "iOS"
+      			}
+    			],
+	Parameters:
+		sut - a criteria used to reserve and connect to a device.		 
+	Returns: 
+		JSONValue, the active connection information.
+**)
+to connectSharedSUT sut
+	set reservedSutInfo to sut
+	
+	if reservedSutInfo.reservation_id is empty or reservedSutInfo.name is empty
+		set reservedSutInfo to reserveSut(sut)
+	end if
+	
+	// Connect to the SUT if a reservation was created.
+	if reservedSutInfo.reservation_id is not empty
+		connectReservedSut(reservedSutInfo)
+		
+		// Cancel the reservation if a connection was not established.
+		if ConnectionInfo().status is not "Connected"
+			cancelSutReservation(reservedSutInfo.reservation_id)
+			throw (reason: "ORNSUT.connectSUT failed to connect to reservation:" && reservedSutInfo.reservation_id)
+		end if
+	end if
+	
+	return reservedSutInfo
+end connectSharedSUT
+
+(**
+	Handler: 
+		ORNSUT.connectPersonalSUT (sut)
+	Description: 
+		Connect to a personal developer system for testing. Criteria currently supports:
+				name, host, port, username, password, type, width, and height.
+		The default width is 1920, and a default height is 1080. We also recommend
+		using credential, instead of username and password if you plan to check-in this code.
+		See ORNCredential for examples of using credentials instead of username and password.
+		An example would include:
+    			"suts": [
+      			{
+	  			  "name": "Windows-VM",
+	  			  "host": "192.168.1.100",
+	  			  "port": "3389",
+	  			  "username": "Administrator",
+	  			  "password": "abc123",
+	  			  "type": "RDP",
+	  			  "width": "1920",
+	  			  "height": "1080",
+	  			  "credential": "000001"
+      			}
+    			],
+	Parameters:
+		sut - a criteria used to reserve and connect to a device.	 
+	Returns: 
+		JSONValue, the active connection information.
+**)
+to connectPersonalSUT sut
+	set developerSutInfo to sut
+	
+	if developerSutInfo.width is empty
+		set developerSutInfo.width to 1920
+	end if
+	
+	if developerSutInfo.height is empty
+		set developerSutInfo.height to 1080
+	end if
+	
+	if developerSutInfo.credential is not empty
+		set credential to ORNCredential.retrieveCredential(developerSutInfo.credential)
+		set developerSutInfo.username to credential.username
+		set developerSutInfo.password to credential.password
+	end if
+	
+	if developerSutInfo.name is empty
+		log "Connecting to host" && developerSutInfo.host
+		Connect (serverID:developerSutInfo.host, portNum: developerSutInfo.port, password: developerSutInfo.password, username: developerSutInfo.username, type: developerSutInfo.type, Width: developerSutInfo.width, Height: developerSutInfo.height)
+	else	
+		log "Connecting to SUT" && developerSutInfo.name
+		Connect developerSutInfo.name
+	end if
+	
+	// Cancel the reservation if a connection was not established.
+	if ConnectionInfo().status is not "Connected"
+		throw (reason: "ORNSUT.connectPersonaltSUT failed to connect to device:" && envTestData.suts.name && envTestData.suts.host)
+	end if
+end connectPersonalSUT
+
+(**
+	Handler: 
+		ORNSUT.disconnectSUT (sut)
+	Description: 
+		Make a GenericHTTP request to device reservation system and disconnect from the current device.
+	Parameters:
+		sut - a criteria used to reserve and connect to a device.	 
+	Returns: 
+		n/a
+**)
+to disconnectSUT sut
+	// Close active Window on a Windows device (harness testing)
+	if connectioninfo() is not empty // sutinfo checks throw exception if not currently connected	
+		if sut.os equals "Windows" or if sutinfo().type equals "Unknown RDP" 
+			Log "Closing active application"
+			typetext altkey, f4 
+		end if
+	end if
+	
+	// Disconnect from the device when a name is available, or current connection when unavailable
+	if sut.name is empty and if connectioninfo() is not empty
+		Log "Attempting to disconnect from current sut"
+		Disconnect()
+	else
+		Log "Attempting to disconnect from:" && sut.name
+		Disconnect(sut.name)
+	end if
+	
+	// Cancel the reservation after disconnecting from the sut.
+	if sut.reservation_id is not empty
+		try
+			cancelSutReservation(sut.reservation_id)
+		catch exception
+			// Possible already cancelled on disconnect
+			Log "Unable to cancel reservation:" && sut.reservation_id
+		end try
+	end if
+end disconnectSUT
+
+(**
+	Handler: 
+		ORNSUT.isConnected (sutName)
+	Description: 
+		Checks if you have active connection
+	Parameters: 
+		sutName - name of SUT device
+	Returns: 
+		Boolean, True if an active connection exists; otherwise False.
+**)
+to isConnected sutName
+	if sutName is empty
+		return ConnectionInfo().Status is "Connected"
+	else
+		return ConnectionInfo(sutName).Status is "Connected"
+	end if
+end isConnected
+
+(**
+	Handler: 
+		ORNSUT.logoutSUT
+	Description: 
+		Attempt to logout of device for zero state. 
+		**Currently supports Windows OS only, mobile support to come.**
+	Parameters: 
+		n/a
+	Returns: 
+		n/a
+**)
+to logoutSUT
+	try
+		If ORNSUT.getDeviceType equals "Windows"
+			log "Attempting to logout of Windows device"
+			typetext windowskey,"r"
+			typetext "cmd", returnKey
+			typetext "shutdown -L", returnKey
+		end if
+	catch
+		LogWarning "Unable to logout of device"
+	end try
+end logoutSUT
+
+(**
+	Handler: 
+		ORNSUT.getDeviceType
+	Description: 
+		Return type of device user is currently connected to and is active SUT.
+	Parameters: 
+		n/a 
+	Returns:
+		sutDeviceType - string, type of device of active sut
+**)
+to getDeviceType
+	if connectionInfo() is not empty
+		if SutInfo().device_type starts with "iPad" then return "iPad"
+		if SutInfo().device_type starts with "iPh" then return "iPhone"
+		if connectionInfo().name contains "Note" then return "Android Tablet" 
+		if connectionInfo().name contains "Tab" then return "Android Tablet" 
+		if SutInfo().os starts with "Android" then return "Android Phone"
+		if SutInfo().os starts with "Win" then return "Windows"
+		if SutInfo().type is "Unknown RDP" then return "Windows" 
+		if SutInfo().type is "Unknown VNC" then return "Mac"
+	else
+		return "Unknown"
+	end if	
+end getDeviceType
+
+(** Internal **)
+
+(**
+	Handler: 
+		ORNSUT.reserveSut (sut)
+	Description: 
+		Reserve a SUT 
+	Parameters: 
+		sut - JSONValue, criteria for a sut reservation (see ORNSUT.connectSUT).		 
+	Returns: 
+		JSONValue, the reserved reservation + sut.
+**)
+to reserveSut sut
+	return reserveSutWithRetry(sut, 0)
+end reserveSut
+
+(**
+	Handler: 
+		ORNSUT.reserveSutWithRetry (sut, retryCount)	
+	Description: 
+		Make a GenericHTTP request to device reservation system.
+		Criteria currently supports Operating System (os), Form Factor (formFactor), Manufacturer, Model, Version (version), and Badge Type (badgeType).
+	Parameters: 
+		sut - JSONValue, criteria for a sut reservation (see ORNSUT.connectSUT).
+		retryCount - Number, the number of attempts the current retry attempt (useful for recursion).		 
+	Returns: 
+		JSONValue, the reserved reservation + sut.
+**)
+to reserveSutWithRetry sut, retryCount
+	if sut.reservationId
+		Log "ORNSUT is already aware of reservation (" && sut.reservationId && "), skipping..."
+		return sut
+	end if
+	
+	if sut.os is not empty then set reservationRequest.os to sut.os
+	if sut.formFactor is not empty then set reservationRequest.form_factor to sut.formFactor
+	if sut.badgeType is not empty then set reservationRequest.badge_type to sut.badgeType
+	if sut.manufacturer is not empty then set reservationRequest.manufacturer to sut.manufacturer
+	if sut.model is not empty then set reservationRequest.model to sut.model
+	if sut.version is not empty then set reservationRequest.version to sut.version
+	
+	try
+		set response to ORNHTTP.post("/reservations", JSONFormat(reservationRequest))
+		set reservedSut to JSONValue(response.responseBody)
+		Log "Successfully reserved sut:" && reservedSut.name && "(" & reservedSut.id & ")"
+		return reservedSut
+	catch exception
+		if retryCount is less than defaultMaxRetries()
+			set retryCount to (retryCount + 1)
+			set retryTime to waitTime(retryCount)
+			Log "Device reservation failed ("& retryCount &"), retrying in" && retryTime && "seconds"
+			wait retryTime
+			return reserveSutWithRetry(sut, retryCount)
+		else
+			Log "No devices available after" && defaultMaxRetries() && "retries"
+			throw (reason: "ORNSUT.reserveSutWithRetry failed to reserve a device successfully.")
+		end if
+	end try
+end reserveSutWithRetry
+
+(**
+	Handler: 
+		ORNSUT.cancelSutReservation (reservationId)
+	Description: 
+		Cancel an existing device reservation.
+	Parameters: 
+		reservationId - Text, unique identifier for the sut reservation.		 
+	Returns: 
+		n/a
+**)
+to cancelSutReservation reservationId
+	try
+		Log "Cancelling reservation:" && reservationId
+		set resourceURL to "/reservations/" & reservationId
+		set response to ORNHTTP.delete(resourceURL)
+		
+		if response.statusCode is not 204
+			Log "Failed cancelling reservation:" && reservationId
+		end if
+	catch exception
+		Log "Failed cancelling reservation:" && reservationId
+		throw exception
+	end try
+end cancelSutReservation
+
+(**
+	Handler: 
+		ORNSUT.defaultWaitTime	
+	Description: 
+		Sets/Returns an internal default wait time
+	Parameters: 
+		n/a		 
+	Returns: 
+		Number, the number of seconds to wait between attempts.
+**)
+to defaultWaitTime
+	return 10
+end defaultWaitTime
+
+(**
+	Handler: 
+		ORNSUT.defaultMaxRetries 	
+	Description: 
+		Set/Return a default retry value maximum
+	Parameters: 
+		n/a		 
+	Returns: 
+		Number, the max number of attempts to retry.
+**)
+to defaultMaxRetries
+	// We don't want to exeed the maximum depth reported by Eggplant
+	// Handlers were called to a depth exceeding the maximum limit (40)
+	return 30
+end defaultMaxRetries
+
+(**
+	Handler: 
+		ORNSUT.defaultMinRetries 	
+	Description: 
+		Set/Return a default retry value minimum
+	Parameters: 
+		n/a		 
+	Returns: 
+		Number, the min number of attempts to retry.
+**)
+to defaultMinRetries
+	return 5
+end defaultMinRetries
+
+(**
+	Handler: 
+		ORNSUT.defaultMaxWaitTime 	
+	Description: 
+		Sets/Returns an internal default wait time maximum
+	Parameters: 
+		n/a		 
+	Returns: 
+		Number, max number of seconds to wait between attempts.
+**)
+to defaultMaxWaitTime
+	// do not wait more than 60 seconds for a reservation
+	return 60
+end defaultMaxWaitTime
+
+(**
+	Handler: 
+		ORNSUT.waitTime (retryCount)	
+	Description: 
+		Sets/Returns the number of seconds to wait for a retry
+	Parameters:
+		 retryCount - Number, the retry attempt		 
+	Returns: 
+		Number, the number of seconds to wait for a retry
+**)
+to waitTime retryCount
+	set waitTimeOptions to ((defaultWaitTime() * retryCount), defaultMaxWaitTime())
+	return minimum of waitTimeOptions
+end waitTime
+
+(**
+	Handler: 
+		ORNSUT.connectReservedSut (reservedSutInfo)	
+	Description: 
+		Given a reservation, connect to the device using EggPlant Functional.
+	Parameters:
+		 reservedSutInfo - JSONValue, sut reservation		 
+	Returns: 
+		n/a
+**)
+to connectReservedSut reservedSutInfo
+	connectReservedSutWithRetry reservedSutInfo, 1
+end connectReservedSut
+
+(**
+	Handler: 
+		ORNSUT.connectReservedSutWithRetry (reservedSutInfo, retryCount)	
+	Description: 
+		Given a reservation, connect to the device using EggPlant Functional.
+		If a connection fails, this function will continue to retry until defaultMaxRetries is reached.
+	Parameters:
+		reservedSutInfo - JSONValue, sut reservation
+		retryCount - Number, the current retry attempt.
+	Returns: 
+		n/a
+**)
+to connectReservedSutWithRetry reservedSutInfo, retryCount
+	try
+		Log "Attempting to connect:" && reservedSutInfo.name
+		if retryCount equals 1 then wait ORNSUT.defaultWaitTime
+		Connect(reservedSutInfo.name)
+		if ORNSUT.isConnected (reservedSutInfo.name) is false
+			throw (reason: "Unsuccessful connection attempt to:" && reservedSutInfo.name)
+		end if
+	catch exception
+		if retryCount is less than defaultMinRetries()
+			set retryCount to (retryCount + 1)
+			set retryTime to defaultWaitTime()
+			Log "Failed connecting to:" && reservedSutInfo.name && "("& retryCount &"), retrying in" && retryTime && "seconds"
+			wait retryTime
+			return connectReservedSutWithRetry(reservedSutInfo, retryCount)
+		else
+			Log "No device connection after" && defaultMinRetries() && "retries"
+			ORNSUT.cancelSutReservation (reservedSutInfo.reservation_ID)
+			throw (reason: "ORNSUT.connectReservedSutWithRetry failed to connect a device successfully.")
+		end if
+	end try
+end connectReservedSutWithRetry

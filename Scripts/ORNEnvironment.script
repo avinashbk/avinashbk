@@ -1,0 +1,184 @@
+﻿(* This script will contain shared handlers for maintaning environment values*)	
+
+(** Public **)
+
+(**
+	Handler: 
+		ORNEnvironment.prepare (envFile, arguments, defaultEnv)
+	Description: 
+		Prepare the environment.
+    		Note, you should be saving this to a variable in your test to ensure you can clean-up later.
+			set environment to ORNEnvironment.prepare(envFile, arguments, defaultEnv)
+			ORNEnvironment.cleanup(environment)
+	Parameters:
+		envFile - ResourceFile, the location of your Orion Test Environment file.
+		arguments - JSONValue, items that will override values and configure the suite with envFile.
+		defaultEnv - Text, when no arguments are passed the defaults to use in envFile.
+	Returns: 
+		returns JSONValue, the configured environment.
+**)
+to prepare envFile, arguments, defaultEnv
+	// Read the envFile
+	Log "Reading environment file:" && envFile
+	set envTestData to read(envFile)
+	
+	// Get the environment we're testing against
+	Log "Applying arguments:" && arguments
+	Log "Applying defaults:" && defaultEnv
+	set environment to environmentToTest(arguments, defaultEnv)
+	
+	// Check if the requested environment configuraiton actually exists
+	if envTestData.keys does not contain environment
+		throw (reason: "Requested environment ("& environment &") does not exist in" && envFile)
+	end if
+	
+	// Populate users based on their credentials.
+	Log "Retrieving user information"
+	set envUsers to ORNUser.getUsers(envTestData.(Value of environment).users)
+	set envTestData.(Value of environment).users to envUsers
+	
+	// Populate test data required for test - currently supports "persons"
+	Log "Retrieving required test data"
+	set domain to envTestData.(Value of environment).domain
+	set persons to envTestData.(Value of environment).persons
+	set personsData to ORNPerson.getPersons(domain, persons)
+	set envTestData.(Value of environment).persons to personsData
+	
+	// Reserve and connect to sut if there is only one requested
+	if envTestData.suts is empty
+		Log "No devices required for test. Skipping device connection"
+		set suts to []
+	else
+		if item 2 in envTestData.suts is empty
+			if ORNSUT.isConnected()
+				Log "Active device connection detected. Reusing existing connection to" && ConnectionInfo().name
+				set suts to (ConnectionInfo())
+			else
+				Log "Single device test detected. Attempting automatic connection"
+				set suts to ORNSUT.connectSut(item 1 in envTestData.suts)
+			end if
+		else
+			Log "Multiple device test detected. Skipping automatic connections"
+			set suts to envTestData.suts
+		end if
+	end if
+	// In either case, return the suts
+	set envTestData.(Value of environment).suts to suts
+	
+	Log "Environment setup complete"
+	return envTestData.(Value of environment)
+end prepare
+
+(**
+	Handler: 
+		ORNEnvironment.cleanup (environment)
+	Description: 
+		Destroy a perfectly good environment.
+	Parameters:
+		environment - JSONValue, the environment to cleanup (see ORNEnvironment.prepare). 
+	Returns: 
+		n/a
+**)
+to cleanup environment
+	if ConnectionInfo() is not empty
+		// Clean-up known reservations
+		Repeat with each item sut of environment.suts
+			Log "Disconnecting sut:" && sut.name
+			ORNSUT.disconnectSUT sut
+		End repeat
+		
+		// Clean-up a manual connection
+		if ConnectionInfo().name is not empty
+			try
+				Log "Disconnecting sut:" && ConnectionInfo().name
+				ORNSUT.disconnectSUT ConnectionInfo()
+			catch exception
+				ORNSUT.disconnectSUT
+				log "Unable to cleanup device:" && ConnectionInfo().name && ", continuing..."
+			end try
+		end if
+	end if
+end cleanup
+
+(**
+	Handler: 
+		ORNEnvironment.handleException (environment, exception)
+	Description: 
+		Log the error, cleanup the environment, and throw the error again.
+    		If a device connection is detected, a screenshot will be captured (Test-Exception)
+	Parameters:
+		environment - JSONValue, the environment to cleanup (see ORNEnvironment.prepare).
+    		exception - the raw exception caught in your try/catch. 
+	Returns: 
+		n/a
+**)
+to handleException environment, exception
+	Log "There was an exception in test execution, cleaning up before handling exception."
+	if ConnectionInfo() is not empty
+		CaptureScreen(Name: "Exception-Prior-to-Cleanup")
+	end if
+	cleanup
+	logError "Exception Call Stack information is" && exception.callStack
+	throw exception	
+end handleException
+
+(** Internal **)
+
+(**
+	Handler: 
+		ORNEnvironment.read (envFile)
+	Description: 
+		Retrieve the contents of a JSON file.
+	Parameters:
+		envFile - ResourceFile, the location of your Orion Test Environment file.
+	Returns: 
+		JSONValue, the contents of the file.
+**)
+to read envFile
+	return JSONValue(file envFile)
+end read
+
+(**
+	Handler: 
+		ORNEnvironment.environmentToTest (rawArguments, defaultEnv)
+	Description: 
+		Given defaults, and override arguments, determine the environment to use.
+	Parameters:
+		rawArguments - see ORNEnvironment.prepare
+		defaultEnv - see ORNEnvironment.prepare
+	Returns: 
+		Text, the name of the environment to use.
+**)
+to environmentToTest rawArguments, defaultEnv
+	if rawArguments is empty
+		return defaultEnv
+	end if
+	
+	put value(rawArguments) into arguments
+	
+	if arguments.env is empty
+		return defaultEnv
+	end if
+	
+	Log "Using Arguments:" && arguments
+	return arguments.env
+end environmentToTest
+
+(**
+	Handler: 
+		ORNEnvironment.killTask (task)
+	Description: 
+		Will end all running processes for passed in task/application
+	Parameters: 
+		task -- process to kill.  Can be a list if needed
+	Returns: 
+		n/a
+**)
+to killTask task
+	repeat with each item of task
+		log "Ending task" && it && "from command line"
+		typetext windowskey,"r"  // open run window
+		wait 1 // faster to add wait then to check run window opens
+		TypeText "taskkill /f /im" && it, ReturnKey 
+	end repeat
+end killTask

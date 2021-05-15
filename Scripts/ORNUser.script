@@ -1,0 +1,54 @@
+﻿(* This script will contain shared handlers for working with System Under Test (SUT) *)	
+
+(** Public **)
+
+(**
+	Handler: 
+		ORNUser.getUsers (usersArray)	
+	Description: 
+		When a credentialId is supplied, retrieve the username and password;
+		otherwise, return the credential as is (assumes username and password is present).
+	Parameters:
+		usersArray - List, JSONValue objects containing user information.		 
+	Returns: 
+		List, JSONValue objects containing user information.
+**)
+to getUsers usersArray
+	set userList to ()
+	repeat with each user of usersArray
+		if user.credential is not empty
+			set userCredential to ORNCredential.retrieveCredential(user.credential)
+			if user.tag is not empty then set userCredential.tag to user.tag 
+			insert userCredential into userList
+		else
+			insert user into userList
+		end if
+	end repeat
+	return userList
+end getUsers
+
+(**
+	Handler: 
+		ORNUser.getUser (environment, tag)	
+	Description: 
+		Retrieve the user given the identifier/tag of a user from a given environment.
+	Parameters:
+		environment - JSONValue, the environment to search the person in.
+		tag - The string identifier/tag of the user to search for.		 
+	Returns: 
+		JSONValue, the contents of the person data.
+**)
+to getUser environment, tag
+	if environment is empty or tag is empty
+		throw (reason: "ORNUser.getUser environment or tag is empty")
+	end if
+	
+	Repeat for each item user in environment.users	
+		if user.tag is equal to tag
+			Log "Found User with tag:" && tag
+			return user
+		end if
+	End repeat
+	
+	throw (reason: "ORNUser.getUser with tag" && tag && "not found")
+end getUser
